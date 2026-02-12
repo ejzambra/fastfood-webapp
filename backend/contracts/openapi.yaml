@@ -1,0 +1,390 @@
+openapi: 3.0.3
+info:
+  title: FastFood WebApp API
+  version: 0.1.0
+  description: Contratos iniciales para operación de salón/cocina/admin.
+servers:
+  - url: https://api.example.com/v1
+
+tags:
+  - name: CustomersAccounts
+  - name: Orders
+  - name: Payments
+  - name: Inventory
+  - name: KitchenConfig
+
+paths:
+  /customers/{customerId}/open-account:
+    post:
+      tags: [CustomersAccounts]
+      summary: Abrir cuenta para cliente
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAccountRequest'
+      responses:
+        '201':
+          description: Cuenta abierta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '409':
+          description: Cliente ya tiene cuenta abierta
+
+  /accounts/{accountId}:
+    get:
+      tags: [CustomersAccounts]
+      summary: Obtener cuenta
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Cuenta encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+
+  /accounts/{accountId}/orders:
+    post:
+      tags: [Orders]
+      summary: Crear pedido en cuenta abierta
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Pedido creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /kitchen/tickets:
+    get:
+      tags: [Orders]
+      summary: Listar tickets de cocina por estado
+      parameters:
+        - in: query
+          name: branchId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, IN_PREP, READY]
+      responses:
+        '200':
+          description: Tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/KitchenTicket'
+
+  /orders/{orderId}/items/{itemId}/status:
+    patch:
+      tags: [Orders]
+      summary: Actualizar estado de item
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/ItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [PENDING, IN_PREP, READY, DELIVERED, CANCELLED]
+      responses:
+        '200':
+          description: Estado actualizado
+
+  /accounts/{accountId}/payments:
+    post:
+      tags: [Payments]
+      summary: Registrar pago
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          description: Pago registrado
+
+  /accounts/{accountId}/close:
+    post:
+      tags: [Payments]
+      summary: Cerrar cuenta
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Cuenta cerrada
+
+  /accounts/{accountId}/mark-uncollectible:
+    post:
+      tags: [Payments]
+      summary: Marcar cuenta como incobrable
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Cuenta marcada incobrable
+
+  /accounts/{accountId}/payments/{paymentEventId}/corrections:
+    post:
+      tags: [Payments]
+      summary: Registrar corrección de pago
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - in: path
+          name: paymentEventId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountDelta, reason]
+              properties:
+                amountDelta:
+                  type: number
+                  format: float
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Corrección registrada
+
+  /inventory/movements:
+    post:
+      tags: [Inventory]
+      summary: Registrar movimiento de inventario/desperdicio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryMovementRequest'
+      responses:
+        '201':
+          description: Movimiento registrado
+
+  /kitchen/config/refresh:
+    put:
+      tags: [KitchenConfig]
+      summary: Actualizar configuración de refresco de cocina
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, refreshSeconds]
+              properties:
+                branchId:
+                  type: string
+                refreshSeconds:
+                  type: integer
+                  minimum: 5
+                  maximum: 120
+      responses:
+        '200':
+          description: Configuración actualizada
+
+components:
+  parameters:
+    CustomerId:
+      in: path
+      name: customerId
+      required: true
+      schema:
+        type: string
+    AccountId:
+      in: path
+      name: accountId
+      required: true
+      schema:
+        type: string
+    OrderId:
+      in: path
+      name: orderId
+      required: true
+      schema:
+        type: string
+    ItemId:
+      in: path
+      name: itemId
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    OpenAccountRequest:
+      type: object
+      required: [tenantId, branchId, openedBy]
+      properties:
+        tenantId:
+          type: string
+        branchId:
+          type: string
+        openedBy:
+          type: string
+
+    Account:
+      type: object
+      required: [accountId, customerId, status, openedAt]
+      properties:
+        accountId:
+          type: string
+        customerId:
+          type: string
+        status:
+          type: string
+          enum: [OPEN, CLOSED, UNCOLLECTIBLE]
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateOrderRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItemInput'
+
+    OrderItemInput:
+      type: object
+      required: [menuItemId, qty]
+      properties:
+        menuItemId:
+          type: string
+        qty:
+          type: integer
+          minimum: 1
+        notes:
+          type: string
+
+    Order:
+      type: object
+      required: [orderId, accountId, status, items]
+      properties:
+        orderId:
+          type: string
+        accountId:
+          type: string
+        status:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KitchenTicket'
+
+    KitchenTicket:
+      type: object
+      required: [itemId, orderId, accountId, status, priority]
+      properties:
+        itemId:
+          type: string
+        orderId:
+          type: string
+        accountId:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, IN_PREP, READY, DELIVERED, CANCELLED]
+        priority:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    PaymentRequest:
+      type: object
+      required: [amount, method, paidBy]
+      properties:
+        amount:
+          type: number
+          format: float
+        method:
+          type: string
+          enum: [CASH, CARD, TRANSFER, QR]
+        paidBy:
+          type: string
+
+    InventoryMovementRequest:
+      type: object
+      required: [tenantId, branchId, type, sku, quantity, reason, recordedBy]
+      properties:
+        tenantId:
+          type: string
+        branchId:
+          type: string
+        type:
+          type: string
+          enum: [CONSUMPTION, RESTOCK, WASTE, ADJUSTMENT]
+        sku:
+          type: string
+        quantity:
+          type: number
+          format: float
+          minimum: 0
+        reason:
+          type: string
+        recordedBy:
+          type: string
